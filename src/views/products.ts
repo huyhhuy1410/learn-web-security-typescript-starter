@@ -22,8 +22,8 @@ export function renderProductPage(
   const reviewItems =
     reviews.length > 0
       ? reviews
-          .map(
-            (review) => `
+          .map((review) =>
+            escapeHtml(`
               <article class="review">
                 <h3>${escapeHtml(review.reviewer_name)}</h3>
                 <p class="rating" aria-label="${review.rating} out of 5 stars">
@@ -31,7 +31,7 @@ export function renderProductPage(
                 </p>
                 <p>${review.body}</p>
                 ${current?.user.id === review.user_id ? `<a href="/account/reviews/${review.id}/edit">Edit your review</a>` : ""}
-              </article>`,
+              </article>`),
           )
           .join("")
       : `<p>No reviews yet. This bear is waiting for judgment.</p>`;

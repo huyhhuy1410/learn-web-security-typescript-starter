@@ -25,7 +25,18 @@ export type CurrentSession = {
   session: Session;
   user: User;
 };
-
+export function revokeAllActiveSessions(db: DatabaseSync): number {
+  const result = db
+    .prepare(
+      `
+      UPDATE sessions
+      SET revoked_at = CURRENT_TIMESTAMP
+      WHERE revoked_at IS NULL
+    `,
+    )
+    .run();
+  return Number(result.changes);
+}
 export function createSession(
   db: DatabaseSync,
   userId: number,
@@ -38,12 +49,14 @@ export function createSession(
   const tokenHash = fastHash(token);
   const csrfToken = randomBytes(32).toString("base64url");
 
-  db.prepare(`
+  db.prepare(
+    `
       INSERT INTO sessions (
         token_hash, user_id, csrf_token, expires_at, last_authenticated_at, created_at
       )
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(tokenHash, userId, csrfToken, expiresAt, nowIso, nowIso);
+    `,
+  ).run(tokenHash, userId, csrfToken, expiresAt, nowIso, nowIso);
 
   const session = findStoredSession(db, tokenHash);
   if (!session) {
@@ -58,11 +71,13 @@ function findStoredSession(
   tokenHash: string,
 ): StoredSession | undefined {
   return db
-    .prepare(`
+    .prepare(
+      `
       SELECT user_id, csrf_token, expires_at, revoked_at, last_authenticated_at, created_at
       FROM sessions
       WHERE token_hash = ?
-    `)
+    `,
+    )
     .get(tokenHash) as StoredSession | undefined;
 }
 
@@ -76,7 +91,11 @@ export function getCurrentSession(
   }
 
   const storedSession = findStoredSession(db, fastHash(token));
-  if (!storedSession || new Date(storedSession.expires_at) <= new Date()) {
+  if (
+    !storedSession ||
+    new Date(storedSession.expires_at) <= new Date() ||
+    storedSession.revoked_at !== null
+  ) {
     return undefined;
   }
   const session = { ...storedSession, token };
@@ -113,9 +132,11 @@ function getCookie(
 }
 
 export function revokeSession(db: DatabaseSync, token: string): void {
-  db.prepare(`
+  db.prepare(
+    `
       UPDATE sessions
       SET revoked_at = ?
       WHERE token_hash = ?
-    `).run(new Date().toISOString(), fastHash(token));
+    `,
+  ).run(new Date().toISOString(), fastHash(token));
 }

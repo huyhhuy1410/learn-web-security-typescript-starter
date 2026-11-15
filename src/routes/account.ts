@@ -43,15 +43,23 @@ import {
   renderTotpEnabledPage,
   renderTotpSetupPage,
 } from "../views/account.ts";
-
+import { verifyPassword } from "../auth/passwords.ts";
 export function createAccountRouter(deps: Dependencies): Router {
   const { db, keyring } = deps;
   const router = Router();
-  const uploadTaxDocument = createUploadMiddleware("document");
+  const uploadTaxDocument = createUploadMiddleware(
+    "document",
+    deps.maxUploadBytes,
+  );
 
   router.get("/account", (req, res) => {
     const current = requireAuth(db, req, res);
     if (!current) return;
+    logEvent("account_accessed", {
+      userId: current.user.id,
+      email: current.user.email,
+      expiresAt: current.session.expires_at,
+    });
     res.type("html").send(renderAccountPage(current));
   });
 
@@ -153,7 +161,7 @@ export function createAccountRouter(deps: Dependencies): Router {
     res.redirect("/account");
   });
 
-  router.post("/account/email", (req, res) => {
+  router.post("/account/email", async (req, res) => {
     const current = requireAuth(db, req, res);
     if (!current) return;
     if (!csrfTokensMatch(current.session.csrf_token, req.body?.csrfToken)) {
@@ -178,6 +186,20 @@ export function createAccountRouter(deps: Dependencies): Router {
         );
       return;
     }
+    if (!(await verifyPassword(currentPassword, current.user.password_hash))) {
+      // wrong password
+      res
+        .status(403)
+        .type("html")
+        .send(
+          renderAccountPage(
+            current,
+            "Re-enter your current password to change your email.",
+          ),
+        );
+      return;
+    }
+
     const email = normalizeEmail(String(req.body.email ?? ""));
     if (!email) {
       res
@@ -278,7 +300,7 @@ export function createAccountRouter(deps: Dependencies): Router {
   router.get("/account/reviews/:id/edit", (req, res) => {
     const current = requireAuth(db, req, res);
     if (!current) return;
-    const review = requireOwnedReview(db, req, res);
+    const review = requireOwnedReview(db, req, res, current.user.id);
     if (!review) return;
     res
       .type("html")
@@ -303,7 +325,7 @@ export function createAccountRouter(deps: Dependencies): Router {
       );
       return;
     }
-    const review = requireOwnedReview(db, req, res);
+    const review = requireOwnedReview(db, req, res, current.user.id);
     if (!review) return;
     const rating = Number(req.body.rating);
     const body = parseReviewBody(req.body.body);
@@ -342,7 +364,7 @@ export function createAccountRouter(deps: Dependencies): Router {
       );
       return;
     }
-    const review = requireOwnedReview(db, req, res);
+    const review = requireOwnedReview(db, req, res, current.user.id);
     if (!review) return;
     deleteReview(db, review.id);
     res.redirect("/account/reviews");

@@ -1,5 +1,5 @@
-import { randomBytes } from "node:crypto";
-import express, { type RequestHandler } from "express";
+import { randomBytes, randomUUID } from "node:crypto";
+import express, { type Response } from "express";
 import { validateRequestOrigin } from "./csrf.ts";
 import type { Dependencies } from "./dependencies.ts";
 import { errorHandler, sendErrorPage } from "./errors.ts";
@@ -20,54 +20,97 @@ import { createProductsRouter } from "./routes/products.ts";
 import { createStorefrontRouter } from "./routes/storefront.ts";
 import { createSupportRouter } from "./routes/support.ts";
 import { migrateSensitiveDataAtRest } from "./storage/migrations.ts";
+import { createRateLimiter } from "./security/rateLimit.ts";
 
-const apiCors: RequestHandler = (req, res, next) => {
-  const origin = req.header("Origin");
+import cors from "cors";
+import helmet from "helmet";
+import { createLoadShedder } from "./security/loadShedding.ts";
 
-  if (origin) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-  }
-
-  res.setHeader("Vary", "Origin");
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-  );
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-
-  if (req.method === "OPTIONS") {
-    res.sendStatus(204);
-    return;
-  }
-
-  next();
-};
-
+const loadShedder = createLoadShedder({
+  maxConcurrent: 50,
+  retryAfterSeconds: 1,
+});
 export function createApp(deps: Dependencies): express.Express {
   migrateSensitiveDataAtRest(deps.db, deps.keyring);
   const app = express();
-
+  app.set("trust proxy", deps.trustedProxyHops);
   app.use((_req, res, next) => {
-    const cspNonce = randomBytes(16).toString("base64");
+    const requestId = randomUUID();
+    res.locals.requestId = requestId;
+    res.setHeader("X-Request-ID", requestId);
+
+    next();
+  });
+  app.use((_req, res, next) => {
+    const cspNonce = randomBytes(16).toString("base64url");
     res.locals.cspNonce = cspNonce;
+
     next();
   });
 
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          scriptSrc: [
+            "'self'",
+            (_req, res) =>
+              `'nonce-${String((res as Response).locals.cspNonce)}'`,
+          ],
+          styleSrc: ["'self'"],
+          frameSrc: ["'self'"],
+          upgradeInsecureRequests: null,
+        },
+      },
+      referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+      xFrameOptions: { action: "sameorigin" },
+      strictTransportSecurity: false,
+    }),
+  );
+  app.use(
+    ["/shipping-widget.css", "/shipping-widget.js"],
+    (_req, res, next) => {
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+      next();
+    },
+  );
   app.get("/health", (_req, res) => {
     res.json({ ok: true, app: "bearly-secure" });
   });
+  app.get("/.well-known/security.txt", (_req, res) => {
+    const expires = new Date(Date.now() + 180 * 24 * 60 * 60 * 1000);
+    res.type("text/plain").send(`Contact: mailto:security@bearlysecure.example
+Policy: https://bearlysecure.example/security-policy
+Expires: ${expires.toISOString()}
+`);
+  });
+
+  app.use(loadShedder);
+  app.use(createRateLimiter({ windowSeconds: 60, max: 100 }));
+
   app.use(express.static("public"));
   app.use(
     "/vendor/simplewebauthn",
     express.static("node_modules/@simplewebauthn/browser/dist/bundle"),
   );
 
-  app.use(express.urlencoded({ extended: false }));
-  app.use(express.json());
+  app.use(
+    express.urlencoded({ extended: false, limit: deps.maxRequestBodyBytes }),
+  );
+  app.use(express.json({ limit: deps.maxRequestBodyBytes }));
+  // The webhook authenticates separately and does not send a browser Origin header.
   app.use(createPawPalRouter(deps));
   app.use(validateRequestOrigin(deps.appOrigin));
-  app.use("/api", apiCors);
+  app.use("/api/products", createRateLimiter({ windowSeconds: 60, max: 30 }));
+  app.use(
+    "/api/products",
+    cors({
+      origin: "*",
+      credentials: false,
+      methods: ["GET"],
+      allowedHeaders: [],
+    }),
+  );
   app.use(createApiRouter(deps));
 
   app.use(createArchiveRouter(deps));

@@ -135,10 +135,16 @@ export function createCartRouter(deps: Dependencies): Router {
 }
 
 function parseCartQuantity(value: unknown, minimum: 0 | 1): number | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const regex = /^(0|[1-9]\d?)$/;
+  if (!regex.test(value)) {
+    return undefined;
+  }
   const quantity = Number(value);
-  return Number.isSafeInteger(quantity) &&
-    quantity >= minimum &&
-    quantity <= MAX_CART_QUANTITY
+  // Enforce the allowed quantity range after parsing.
+  return quantity >= minimum && quantity <= MAX_CART_QUANTITY
     ? quantity
     : undefined;
 }

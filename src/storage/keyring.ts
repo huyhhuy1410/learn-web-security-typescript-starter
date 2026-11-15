@@ -1,3 +1,4 @@
+import { encrypt, decrypt } from "./encryption.ts";
 const ACTIVE_VERSION_ENV = "DATA_ENCRYPTION_ACTIVE_VERSION";
 const KEY_ENV_PREFIX = "DATA_ENCRYPTION_KEY_";
 const KEY_HEX_PATTERN = /^[0-9a-f]{64}$/i;
@@ -21,7 +22,40 @@ type SerializedEncryptedPayload = {
   authTag: string;
   ciphertext: string;
 };
+export function encryptWithKeyring(
+  plaintext: Buffer,
+  keyring: Keyring | undefined,
+): VersionedEncryptedPayload {
+  const configuredKeyring = requireKeyring(keyring);
+  const key = configuredKeyring.keys.get(configuredKeyring.activeVersion);
 
+  if (!key) {
+    throw new Error(
+      `Missing encryption key for version: ${configuredKeyring.activeVersion}`,
+    );
+  }
+  const encryptedPayload = encrypt(plaintext, key);
+  return {
+    ...encryptedPayload,
+    keyVersion: configuredKeyring.activeVersion,
+  };
+}
+export function decryptWithKeyring(
+  payload: VersionedEncryptedPayload,
+  keyring: Keyring | undefined,
+): Buffer {
+  const configuredKeyring = requireKeyring(keyring);
+  const key = configuredKeyring.keys.get(payload.keyVersion);
+
+  if (!key) {
+    throw new Error(
+      `Missing encryption key for version: ${payload.keyVersion}`,
+    );
+  }
+
+  const decryptedPayload = decrypt(payload, key);
+  return decryptedPayload;
+}
 export function loadOptionalKeyring(
   env: NodeJS.ProcessEnv = process.env,
 ): Keyring | undefined {
@@ -78,16 +112,22 @@ export function requireKeyring(keyring: Keyring | undefined): Keyring {
 
 export function encryptStringWithKeyring(
   value: string,
-  _keyring: Keyring | undefined,
+  keyring: Keyring | undefined,
 ): string {
-  return value;
+  const bufferedValue = Buffer.from(value, "utf-8");
+  const encrypedPayload = encryptWithKeyring(bufferedValue, keyring);
+  const serializedPayload = serializeEncryptedPayload(encrypedPayload);
+  return serializedPayload.toString("utf-8");
 }
 
 export function decryptStringWithKeyring(
   value: string,
-  _keyring: Keyring | undefined,
+  keyring: Keyring | undefined,
 ): string {
-  return value;
+  const payload = Buffer.from(value, "utf-8");
+  const deserializedPayload = deserializeEncryptedPayload(payload);
+  const decryptedPayload = decryptWithKeyring(deserializedPayload, keyring);
+  return decryptedPayload.toString("utf-8");
 }
 
 export function serializeEncryptedPayload(

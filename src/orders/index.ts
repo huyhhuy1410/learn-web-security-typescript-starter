@@ -39,12 +39,13 @@ export function createOrderFromCart(
   db: DatabaseSync,
   userId: number,
   items: CartItem[],
-  discountCents: number,
+  // discountCents: number,
   shippingDetails: ShippingDetails,
   adminNotes: string,
   keyring: Keyring | undefined,
 ): Order {
-  const totalCents = getCartTotalCents(items) - discountCents;
+  const totalCents = getCartTotalCents(items);
+  // const totalCents = getCartTotalCents(items) - discountCents;
   const encryptedShippingDetails = encryptShippingDetails(
     shippingDetails,
     keyring,
@@ -74,6 +75,7 @@ export function createOrderFromCart(
         VALUES (?, ?, ?, ?)
       `,
     );
+    // Check and decrement together to prevent concurrent orders from overselling.
     const decrementInventory = db.prepare(
       `
         UPDATE products

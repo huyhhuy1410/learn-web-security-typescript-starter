@@ -1,0 +1,40 @@
+# Environment files
+.env
+.env.*
+
+# Git directory
+.git/
+
+# Installed dependencies
+node_modules/
+
+# Compiled output
+dist/
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Temporary files
+**/*.tmp
+**/*.temp
+**/tmp/
+**/temp/
+
+# Local databases
+**/*.sqlite
+**/*.sqlite-shm
+**/*.sqlite-wal
+**/*.db
+**/*.db-shm
+**/*.db-wal
+
+# Logs
+**/*.log
+
+# Bulk-import documents
+data/bulk-tax-documents/
+
+# Runtime uploads, except the required Mystery Shack PDF
+data/uploads/*
+!data/fixtures

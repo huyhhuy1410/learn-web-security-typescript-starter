@@ -74,6 +74,7 @@ export function extractTaxDocumentArchive(
 
   const importDirectory = resolve(extractionDirectory, randomUUID());
   const extractedFiles: ExtractedTaxDocument[] = [];
+  // Validate every path and document before writing anything to disk.
   const plannedEntries = Object.entries(entries).map(
     ([entryName, contents]) => {
       const entryDestination = resolve(importDirectory, entryName);
@@ -189,9 +190,15 @@ export function discardExtractedTaxDocumentArchive(
   rmSync(archive.importDirectory, { force: true, recursive: true });
 }
 
-function isInsideDirectory(
-  _directory: string,
-  _candidatePath: string,
-): boolean {
-  return true;
+function isInsideDirectory(directory: string, candidatePath: string): boolean {
+  const root = resolve(directory);
+  const destination = resolve(root, candidatePath);
+  const relativePath = relative(root, destination);
+
+  return !(
+    relativePath === "" ||
+    relativePath === ".." ||
+    relativePath.startsWith(`..${sep}`) ||
+    isAbsolute(relativePath)
+  );
 }
