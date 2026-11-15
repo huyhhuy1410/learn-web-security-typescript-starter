@@ -1,11 +1,7 @@
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { openDatabase } from "./db/index.ts";
-import {
-  loadKeyring,
-  loadOptionalKeyring,
-  type Keyring,
-} from "./storage/keyring.ts";
+import { loadKeyring, type Keyring } from "./storage/keyring.ts";
 
 export type Dependencies = {
   appOrigin: string;

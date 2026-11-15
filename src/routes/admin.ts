@@ -176,8 +176,6 @@ export function createAdminRouter(deps: Dependencies): Router {
   return router;
 }
 
-
-
 function requireProduct(
   db: DatabaseSync,
   req: Request,

@@ -1,5 +1,4 @@
 import type { RequestHandler, Response } from "express";
-import { request } from "node:http";
 
 export type LoadSheddingOptions = {
   maxConcurrent: number;

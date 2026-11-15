@@ -7,7 +7,7 @@ const sessionCookieOptions = {
   expires: new Date(0),
   httpOnly: true,
   secure: true,
-  sameSite: "lax"
+  sameSite: "lax",
 } satisfies CookieOptions;
 
 type CookieSession = {

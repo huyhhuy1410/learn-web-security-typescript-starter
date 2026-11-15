@@ -1,7 +1,6 @@
 import type { RequestHandler } from "express";
 import { sendErrorPage } from "./errors.ts";
 import { timingSafeEqual } from "node:crypto";
-import { buffer } from "node:stream/consumers";
 export function validateRequestOrigin(appOrigin: string): RequestHandler {
   return (req, res, next) => {
     if (req.method !== "POST") return next();
@@ -24,7 +23,9 @@ export function validateRequestOrigin(appOrigin: string): RequestHandler {
       ) {
         return next();
       }
-    } catch (error) {}
+    } catch {
+      // An invalid Referer is rejected below.
+    }
 
     return sendErrorPage(
       res,

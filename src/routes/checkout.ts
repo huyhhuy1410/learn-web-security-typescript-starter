@@ -13,7 +13,6 @@ import {
 } from "../views/checkout.ts";
 import {
   isAcornFulfillmentTimeout,
-  reserveAcornFulfillment,
   reserveAcornFulfillmentWithTimeout,
 } from "../integrations/acornFulfillment.ts";
 import {

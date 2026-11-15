@@ -167,7 +167,7 @@ export function searchProducts(db: DatabaseSync, query: string): Product[] {
     ORDER BY name
   `;
 
- const searchTerm = `%${query}%`;
+  const searchTerm = `%${query}%`;
   return db.prepare(sql).all(searchTerm, searchTerm) as Product[];
 }
 

@@ -2,11 +2,7 @@ import { Router } from "express";
 import type { Dependencies } from "../dependencies.ts";
 import { getCurrentSession } from "../auth/sessions.ts";
 import { listCartItems } from "../cart.ts";
-import {
-  listPublicProducts,
-  searchProducts,
-  searchPublicProducts,
-} from "../products.ts";
+import { listPublicProducts, searchPublicProducts } from "../products.ts";
 import { renderSearchPage, renderStorefrontPage } from "../views/storefront.ts";
 import { createRateLimiter } from "../security/rateLimit.ts";
 import { sendErrorPage } from "../errors.ts";
